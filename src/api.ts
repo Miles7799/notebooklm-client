@@ -458,6 +458,7 @@ export async function getInteractiveHtml(
     const flat = Array.isArray(first[0]) ? first[0] as unknown[] : first;
     for (const el of flat) {
       if (typeof el === 'string' && el.length > 200 && el.includes('<')) return el;
+      if (Array.isArray(el) && typeof el[0] === 'string' && el[0].length > 200 && el[0].includes('<')) return el[0];
     }
   }
   return '';
