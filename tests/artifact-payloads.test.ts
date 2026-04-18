@@ -142,8 +142,8 @@ describe('buildVideoPayload', () => {
     expect(inner[0]).toEqual(sidsDouble);
     expect(inner[1]).toBe('en');
     expect(inner[2]).toBe('Make it fun');
-    expect(inner[4]).toBe(1); // explainer
-    expect(inner[5]).toBe(6); // anime
+    expect(inner[4]).toBe(1);
+    expect(inner[5]).toBe(6);
   });
 
   it('should ignore style when format is cinematic', () => {
@@ -151,11 +151,11 @@ describe('buildVideoPayload', () => {
       type: 'video',
       language: 'en',
       format: 'cinematic',
-      style: 'anime', // should be ignored
+      style: 'anime',
     });
     const inner = (result[8] as unknown[])[2] as unknown[];
-    expect(inner[4]).toBe(3); // cinematic
-    expect(inner[5]).toBeNull(); // style stripped
+    expect(inner[4]).toBe(3);
+    expect(inner[5]).toBeNull();
   });
 
   it('should map all style values', () => {
@@ -191,9 +191,9 @@ describe('buildQuizPayload', () => {
       difficulty: 'hard',
     });
     const inner = (result[9] as unknown[])[1] as unknown[];
-    expect(inner[0]).toBe(2); // variant = quiz
+    expect(inner[0]).toBe(2);
     expect(inner[2]).toBe('Focus on chapter 3');
-    expect(inner[7]).toEqual([1, 3]); // [fewer=1, hard=3]
+    expect(inner[7]).toEqual([1, 3]);
   });
 });
 
@@ -216,10 +216,9 @@ describe('buildFlashcardsPayload', () => {
       difficulty: 'easy',
     });
     const inner = (result[9] as unknown[])[1] as unknown[];
-    expect(inner[0]).toBe(1); // variant = flashcards
+    expect(inner[0]).toBe(1);
     expect(inner[2]).toBe('Key terms only');
-    // Flashcards: [difficulty, quantity] — reversed from quiz!
-    expect(inner[6]).toEqual([1, 2]); // [easy=1, standard=2]
+    expect(inner[6]).toEqual([1, 2]);
   });
 });
 
@@ -229,7 +228,6 @@ describe('buildInfographicPayload', () => {
       type: 'infographic',
       language: 'en',
     });
-    // 14 nulls after sidsTriple, then the config
     expect(result[0]).toBeNull();
     expect(result[2]).toBe(7);
     expect(result[3]).toEqual(sidsTriple);
@@ -248,9 +246,9 @@ describe('buildInfographicPayload', () => {
     const config = (result[14] as unknown[][])[0] as unknown[];
     expect(config[0]).toBe('Use bright colors');
     expect(config[1]).toBe('ja');
-    expect(config[3]).toBe(2); // portrait
-    expect(config[4]).toBe(3); // detailed
-    expect(config[5]).toBe(4); // bento_grid
+    expect(config[3]).toBe(2);
+    expect(config[4]).toBe(3);
+    expect(config[5]).toBe(4);
   });
 
   it('should map all style values', () => {
@@ -290,8 +288,8 @@ describe('buildSlideDeckPayload', () => {
     const config = (result[16] as unknown[][])[0] as unknown[];
     expect(config[0]).toBe('Keep it concise');
     expect(config[1]).toBe('ko');
-    expect(config[2]).toBe(2); // presenter
-    expect(config[3]).toBe(2); // short
+    expect(config[2]).toBe(2);
+    expect(config[3]).toBe(2);
   });
 });
 
@@ -304,7 +302,6 @@ describe('buildDataTablePayload', () => {
     expect(result[0]).toBeNull();
     expect(result[2]).toBe(9);
     expect(result[3]).toEqual(sidsTriple);
-    // After sidsTriple: 14 nulls, then config at index 18
     expect(result[18]).toEqual([null, [null, 'en']]);
   });
 

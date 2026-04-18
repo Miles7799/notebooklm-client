@@ -451,16 +451,27 @@ export async function getInteractiveHtml(
 ): Promise<string> {
   const raw = await callRpc(NB_RPC.GET_INTERACTIVE_HTML, [artifactId]);
   const envelopes = parseEnvelopes(raw);
-  const first = envelopes[0];
-  if (typeof first === 'string') return first;
-  if (Array.isArray(first)) {
-    if (typeof first[0] === 'string') return first[0];
-    const flat = Array.isArray(first[0]) ? first[0] as unknown[] : first;
-    for (const el of flat) {
-      if (typeof el === 'string' && el.length > 200 && el.includes('<')) return el;
-      if (Array.isArray(el) && typeof el[0] === 'string' && el[0].length > 200 && el[0].includes('<')) return el[0];
+
+  const findHtml = (value: unknown, depth = 0): string => {
+    if (depth > 10) return '';
+    if (typeof value === 'string') {
+      return value.length > 200 && /<(?:!doctype html|html|app-root|section|div)\b/i.test(value) ? value : '';
     }
+    if (!Array.isArray(value)) return '';
+    for (const item of value) {
+      if (typeof item === 'string' && item.length > 200 && item.includes('<')) return item;
+      if (Array.isArray(item) && typeof item[0] === 'string' && item[0].length > 200 && item[0].includes('<')) return item[0];
+      const html = findHtml(item, depth + 1);
+      if (html) return html;
+    }
+    return '';
+  };
+
+  for (const envelope of envelopes) {
+    const html = findHtml(envelope);
+    if (html) return html;
   }
+
   return '';
 }
 

@@ -11,6 +11,8 @@ import {
   parseStudioConfig,
   parseQuota,
   parseResearchResults,
+  extractFlashcardsFromHtml,
+  renderFlashcardsMarkdown,
 } from '../src/parser.js';
 
 function wrapEnvelope(rpcId: string, inner: unknown): string {
@@ -98,6 +100,15 @@ describe('parseGenerateArtifact', () => {
     expect(result.artifactId).toBe('artifact-uuid-456');
     expect(result.title).toBe('Deep Dive Audio');
   });
+
+  it('extracts artifact tuple from nested wrapper shapes', () => {
+    const raw = wrapEnvelope('R7cb6c', [
+      [[['artifact-uuid-999', 'Flashcards', 4]]],
+    ]);
+    const result = parseGenerateArtifact(raw);
+    expect(result.artifactId).toBe('artifact-uuid-999');
+    expect(result.title).toBe('Flashcards');
+  });
 });
 
 describe('parseArtifacts', () => {
@@ -125,9 +136,114 @@ describe('parseArtifacts', () => {
     expect(artifacts[0]!.sourceIds).toEqual(['src-1']);
   });
 
+  it('extracts non-audio artifacts without media URLs', () => {
+    const raw = wrapEnvelope('gArtLc', [
+      [
+        [
+          ['art-quiz-1', 'Flashcards', 4, [[['src-1']]], null, null, [null, [1, null, 'prompt']]],
+        ],
+      ],
+    ]);
+    const artifacts = parseArtifacts(raw);
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0]!.id).toBe('art-quiz-1');
+    expect(artifacts[0]!.title).toBe('Flashcards');
+    expect(artifacts[0]!.type).toBe(4);
+    expect(artifacts[0]!.downloadUrl).toBeUndefined();
+    expect(artifacts[0]!.sourceIds).toEqual(['src-1']);
+  });
+
   it('returns empty for invalid data', () => {
     const raw = wrapEnvelope('gArtLc', null);
     expect(parseArtifacts(raw)).toEqual([]);
+  });
+});
+
+describe('extractFlashcardsFromHtml', () => {
+  it('extracts cards from JSON-like script payloads', () => {
+    const html = `
+      <html><body>
+        <script>
+          window.__DATA__ = {
+            "cards": [
+              {"front":"What is TypeScript?","back":"A typed superset of JavaScript."},
+              {"question":"Who maintains it?","answer":"Microsoft."}
+            ]
+          };
+        </script>
+      </body></html>
+    `;
+    const cards = extractFlashcardsFromHtml(html);
+    expect(cards).toEqual([
+      { front: 'What is TypeScript?', back: 'A typed superset of JavaScript.' },
+      { front: 'Who maintains it?', back: 'Microsoft.' },
+    ]);
+  });
+
+  it('extracts cards from app-root data payloads', () => {
+    const html = `
+      <!doctype html>
+      <html>
+        <body>
+          <app-root data-app-data="{
+            &quot;flashcards&quot;: [
+              {
+                &quot;f&quot;: &quot;What is TypeScript?&quot;,
+                &quot;b&quot;: &quot;A typed superset of JavaScript.&quot;
+              },
+              {
+                &quot;f&quot;: &quot;Who maintains it?&quot;,
+                &quot;b&quot;: &quot;Microsoft.&quot;
+              }
+            ]
+          }"></app-root>
+        </body>
+      </html>
+    `;
+    const cards = extractFlashcardsFromHtml(html);
+    expect(cards).toEqual([
+      { front: 'What is TypeScript?', back: 'A typed superset of JavaScript.' },
+      { front: 'Who maintains it?', back: 'Microsoft.' },
+    ]);
+  });
+
+  it('extracts cards from DOM-labelled blocks', () => {
+    const html = `
+      <section class="flashcard">
+        <div class="front">Term A</div>
+        <div class="back">Definition A</div>
+      </section>
+      <section class="flashcard">
+        <div class="question">Question B</div>
+        <div class="answer">Answer B</div>
+      </section>
+    `;
+    const cards = extractFlashcardsFromHtml(html);
+    expect(cards).toEqual([
+      { front: 'Term A', back: 'Definition A' },
+      { front: 'Question B', back: 'Answer B' },
+    ]);
+  });
+
+  it('renders markdown for parsed cards', () => {
+    const markdown = renderFlashcardsMarkdown([
+      { front: 'Front 1', back: 'Back 1' },
+      { front: 'Front 2', back: 'Back 2' },
+    ]);
+    expect(markdown).toContain('# Flashcards');
+    expect(markdown).toContain('> Total cards: 2');
+    expect(markdown).toContain('## Card 1');
+    expect(markdown).toContain('### Front');
+    expect(markdown).toContain('Front 1');
+    expect(markdown).toContain('### Back');
+    expect(markdown).toContain('Back 2');
+    expect(markdown).toContain('---');
+  });
+
+  it('renders a clearer empty-state message', () => {
+    const markdown = renderFlashcardsMarkdown([]);
+    expect(markdown).toContain('No flashcards could be parsed from the exported HTML');
+    expect(markdown).toContain('regenerate the artifact');
   });
 });
 

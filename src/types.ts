@@ -240,9 +240,17 @@ export interface MindMapResult {
   notebookUrl: string;
 }
 
+export interface Flashcard {
+  front: string;
+  back: string;
+}
+
 export interface FlashcardsResult {
+  artifactId: string;
   htmlPath: string;
-  cards: Array<{ front: string; back: string }>;
+  jsonPath: string;
+  markdownPath: string;
+  cards: Flashcard[];
   notebookUrl: string;
 }
 

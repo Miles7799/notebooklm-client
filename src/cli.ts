@@ -373,8 +373,14 @@ addBrowserOptions(addSourceOptions(flashcardsCmd))
         },
         progressLogger,
       );
-      console.log(result.htmlPath);
-      console.error(`Notebook: ${result.notebookUrl}`);
+      console.log(JSON.stringify({
+        artifactId: result.artifactId,
+        count: result.cards.length,
+        htmlPath: result.htmlPath,
+        jsonPath: result.jsonPath,
+        markdownPath: result.markdownPath,
+        notebookUrl: result.notebookUrl,
+      }, null, 2));
     });
   });
 

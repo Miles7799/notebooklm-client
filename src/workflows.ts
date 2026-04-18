@@ -6,7 +6,7 @@
  * create notebook → add source → generate artifact → download.
  */
 
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { NB_URLS, ARTIFACT_TYPE } from './rpc-ids.js';
 import { humanSleep } from './utils/humanize.js';
@@ -18,6 +18,7 @@ import {
   saveInfographic,
   saveDataTable,
 } from './download.js';
+import { extractFlashcardsFromHtml, renderFlashcardsMarkdown } from './parser.js';
 import type { NotebookClient } from './client.js';
 import type {
   SourceInput,
@@ -262,9 +263,23 @@ export async function runFlashcards(
     (id) => client.getInteractiveHtml(id),
     artifactId, options.outputDir, 'flashcards',
   );
+  const html = await import('node:fs/promises').then((fs) => fs.readFile(htmlPath, 'utf-8'));
+  const cards = extractFlashcardsFromHtml(html);
+  const stamp = Date.now();
+  const jsonPath = join(options.outputDir, `flashcards_${stamp}.json`);
+  const markdownPath = join(options.outputDir, `flashcards_${stamp}.md`);
+  writeFileSync(jsonPath, `${JSON.stringify(cards, null, 2)}\n`, 'utf-8');
+  writeFileSync(markdownPath, renderFlashcardsMarkdown(cards), 'utf-8');
 
   onProgress?.({ status: 'completed', message: 'Flashcards generated!' });
-  return { htmlPath, cards: [], notebookUrl: `${NB_URLS.BASE}/notebook/${notebookId}` };
+  return {
+    artifactId,
+    htmlPath,
+    jsonPath,
+    markdownPath,
+    cards,
+    notebookUrl: `${NB_URLS.BASE}/notebook/${notebookId}`,
+  };
 }
 
 export async function runAnalyze(
