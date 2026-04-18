@@ -9,6 +9,7 @@ import { NotebookClient } from './client.js';
 import type { TransportMode } from './client.js';
 import { setHomeDir } from './paths.js';
 import type { SourceInput, WorkflowProgress } from './types.js';
+import { ARTIFACT_TYPE } from './rpc-ids.js';
 
 const program = new Command();
 
@@ -204,7 +205,10 @@ const audioCmd = new Command('audio')
 addBrowserOptions(addSourceOptions(audioCmd))
   .requiredOption('-o, --output <dir>', 'Output directory')
   .option('-l, --language <lang>', 'Audio language', 'en')
-  .option('--custom-prompt <prompt>', 'Custom generation prompt')
+  .option('--custom-prompt <prompt>', 'Custom generation prompt (alias: --instructions)')
+  .option('--instructions <text>', 'Custom generation instructions')
+  .option('--format <fmt>', 'Audio format: deep_dive | brief | critique | debate')
+  .option('--length <len>', 'Audio length: short | default | long')
   .option('--keep-notebook', 'Do not delete the notebook after completion')
   .action(async (opts) => {
     const source = buildSource(opts);
@@ -214,7 +218,10 @@ addBrowserOptions(addSourceOptions(audioCmd))
           source,
           outputDir: opts.output,
           language: opts.language,
+          instructions: opts.instructions,
           customPrompt: opts.customPrompt,
+          format: opts.format,
+          length: opts.length,
         },
         progressLogger,
       );
@@ -247,6 +254,233 @@ addBrowserOptions(addSourceOptions(analyzeCmd))
 
 program.addCommand(analyzeCmd);
 
+// ── Report Command ──
+
+const reportCmd = new Command('report')
+  .description('Generate a report (briefing doc, study guide, blog post, or custom)');
+
+addBrowserOptions(addSourceOptions(reportCmd))
+  .requiredOption('-o, --output <dir>', 'Output directory')
+  .option('--template <t>', 'Report template: briefing_doc | study_guide | blog_post | custom', 'briefing_doc')
+  .option('--instructions <text>', 'Custom instructions (appended to template, or full prompt for custom)')
+  .option('-l, --language <lang>', 'Output language', 'en')
+  .action(async (opts) => {
+    const source = buildSource(opts);
+    await withClient(opts, async (client) => {
+      const result = await client.runReport(
+        {
+          source,
+          outputDir: opts.output,
+          template: opts.template,
+          instructions: opts.instructions,
+          language: opts.language,
+        },
+        progressLogger,
+      );
+      console.log(result.markdownPath);
+      console.error(`Notebook: ${result.notebookUrl}`);
+    });
+  });
+
+program.addCommand(reportCmd);
+
+// ── Video Command ──
+
+const videoCmd = new Command('video')
+  .description('Generate a video overview');
+
+addBrowserOptions(addSourceOptions(videoCmd))
+  .requiredOption('-o, --output <dir>', 'Output directory')
+  .option('--format <fmt>', 'Video format: explainer | brief | cinematic')
+  .option('--style <s>', 'Video style: auto | classic | whiteboard | kawaii | anime | watercolor | retro_print')
+  .option('--instructions <text>', 'Custom instructions')
+  .option('-l, --language <lang>', 'Output language', 'en')
+  .action(async (opts) => {
+    const source = buildSource(opts);
+    await withClient(opts, async (client) => {
+      const result = await client.runVideo(
+        {
+          source,
+          outputDir: opts.output,
+          format: opts.format,
+          style: opts.style,
+          instructions: opts.instructions,
+          language: opts.language,
+        },
+        progressLogger,
+      );
+      console.log(result.videoUrl);
+      console.error(`Notebook: ${result.notebookUrl}`);
+    });
+  });
+
+program.addCommand(videoCmd);
+
+// ── Quiz Command ──
+
+const quizCmd = new Command('quiz')
+  .description('Generate a quiz');
+
+addBrowserOptions(addSourceOptions(quizCmd))
+  .requiredOption('-o, --output <dir>', 'Output directory')
+  .option('--instructions <text>', 'Custom instructions')
+  .option('-l, --language <lang>', 'Output language', 'en')
+  .option('--quantity <q>', 'Quiz quantity: fewer | standard')
+  .option('--difficulty <d>', 'Quiz difficulty: easy | medium | hard')
+  .action(async (opts) => {
+    const source = buildSource(opts);
+    await withClient(opts, async (client) => {
+      const result = await client.runQuiz(
+        {
+          source,
+          outputDir: opts.output,
+          instructions: opts.instructions,
+          language: opts.language,
+          quantity: opts.quantity,
+          difficulty: opts.difficulty,
+        },
+        progressLogger,
+      );
+      console.log(result.htmlPath);
+      console.error(`Notebook: ${result.notebookUrl}`);
+    });
+  });
+
+program.addCommand(quizCmd);
+
+// ── Flashcards Command ──
+
+const flashcardsCmd = new Command('flashcards')
+  .description('Generate flashcards');
+
+addBrowserOptions(addSourceOptions(flashcardsCmd))
+  .requiredOption('-o, --output <dir>', 'Output directory')
+  .option('--instructions <text>', 'Custom instructions')
+  .option('-l, --language <lang>', 'Output language', 'en')
+  .option('--quantity <q>', 'Flashcard quantity: fewer | standard')
+  .option('--difficulty <d>', 'Flashcard difficulty: easy | medium | hard')
+  .action(async (opts) => {
+    const source = buildSource(opts);
+    await withClient(opts, async (client) => {
+      const result = await client.runFlashcards(
+        {
+          source,
+          outputDir: opts.output,
+          instructions: opts.instructions,
+          language: opts.language,
+          quantity: opts.quantity,
+          difficulty: opts.difficulty,
+        },
+        progressLogger,
+      );
+      console.log(JSON.stringify({
+        artifactId: result.artifactId,
+        count: result.cards.length,
+        htmlPath: result.htmlPath,
+        jsonPath: result.jsonPath,
+        markdownPath: result.markdownPath,
+        notebookUrl: result.notebookUrl,
+      }, null, 2));
+    });
+  });
+
+program.addCommand(flashcardsCmd);
+
+// ── Infographic Command ──
+
+const infographicCmd = new Command('infographic')
+  .description('Generate an infographic');
+
+addBrowserOptions(addSourceOptions(infographicCmd))
+  .requiredOption('-o, --output <dir>', 'Output directory')
+  .option('--instructions <text>', 'Custom instructions')
+  .option('-l, --language <lang>', 'Output language', 'en')
+  .option('--orientation <o>', 'Orientation: landscape | portrait | square')
+  .option('--detail <d>', 'Detail level: concise | standard | detailed')
+  .option('--style <s>', 'Style: sketch_note | professional | bento_grid')
+  .action(async (opts) => {
+    const source = buildSource(opts);
+    await withClient(opts, async (client) => {
+      const result = await client.runInfographic(
+        {
+          source,
+          outputDir: opts.output,
+          instructions: opts.instructions,
+          language: opts.language,
+          orientation: opts.orientation,
+          detail: opts.detail,
+          style: opts.style,
+        },
+        progressLogger,
+      );
+      console.log(result.imagePath);
+      console.error(`Notebook: ${result.notebookUrl}`);
+    });
+  });
+
+program.addCommand(infographicCmd);
+
+// ── Slides Command ──
+
+const slidesCmd = new Command('slides')
+  .description('Generate a slide deck');
+
+addBrowserOptions(addSourceOptions(slidesCmd))
+  .requiredOption('-o, --output <dir>', 'Output directory')
+  .option('--instructions <text>', 'Custom instructions')
+  .option('-l, --language <lang>', 'Output language', 'en')
+  .option('--format <fmt>', 'Slide format: detailed | presenter')
+  .option('--length <len>', 'Slide length: default | short')
+  .action(async (opts) => {
+    const source = buildSource(opts);
+    await withClient(opts, async (client) => {
+      const result = await client.runSlideDeck(
+        {
+          source,
+          outputDir: opts.output,
+          instructions: opts.instructions,
+          language: opts.language,
+          format: opts.format,
+          length: opts.length,
+        },
+        progressLogger,
+      );
+      console.log(result.pptxPath);
+      if (result.pdfPath) console.log(result.pdfPath);
+      console.error(`Notebook: ${result.notebookUrl}`);
+    });
+  });
+
+program.addCommand(slidesCmd);
+
+// ── Data Table Command ──
+
+const dataTableCmd = new Command('data-table')
+  .description('Generate a data table');
+
+addBrowserOptions(addSourceOptions(dataTableCmd))
+  .requiredOption('-o, --output <dir>', 'Output directory')
+  .option('--instructions <text>', 'Custom instructions (describe desired table structure)')
+  .option('-l, --language <lang>', 'Output language', 'en')
+  .action(async (opts) => {
+    const source = buildSource(opts);
+    await withClient(opts, async (client) => {
+      const result = await client.runDataTable(
+        {
+          source,
+          outputDir: opts.output,
+          instructions: opts.instructions,
+          language: opts.language,
+        },
+        progressLogger,
+      );
+      console.log(result.csvPath);
+      console.error(`Notebook: ${result.notebookUrl}`);
+    });
+  });
+
+program.addCommand(dataTableCmd);
+
 // ── List Command ──
 
 const listCmd = new Command('list')
@@ -271,6 +505,23 @@ program.addCommand(listCmd);
 
 // ── Detail Command ──
 
+const ARTIFACT_TYPE_LABEL: Record<number, string> = {
+  [ARTIFACT_TYPE.AUDIO]: 'audio',
+  [ARTIFACT_TYPE.REPORT]: 'report',
+  [ARTIFACT_TYPE.VIDEO]: 'video',
+  [ARTIFACT_TYPE.QUIZ]: 'quiz',
+  [ARTIFACT_TYPE.MIND_MAP]: 'mind-map',
+  [ARTIFACT_TYPE.INFOGRAPHIC]: 'infographic',
+  [ARTIFACT_TYPE.SLIDE_DECK]: 'slides',
+  [ARTIFACT_TYPE.DATA_TABLE]: 'data-table',
+};
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return m > 0 ? `${m}m${s > 0 ? `${s}s` : ''}` : `${s}s`;
+}
+
 const detailCmd = new Command('detail')
   .description('Show notebook details')
   .argument('<notebook-id>', 'Notebook ID');
@@ -278,7 +529,10 @@ const detailCmd = new Command('detail')
 addBrowserOptions(detailCmd)
   .action(async (notebookId: string, opts) => {
     await withClient(opts, async (client) => {
-      const detail = await client.getNotebookDetail(notebookId);
+      const [detail, artifacts] = await Promise.all([
+        client.getNotebookDetail(notebookId),
+        client.getArtifacts(notebookId).catch(() => []),
+      ]);
       console.log(`Title: ${detail.title}`);
       console.log(`Sources (${detail.sources.length}):`);
       for (const src of detail.sources) {
@@ -286,10 +540,36 @@ addBrowserOptions(detailCmd)
         const url = src.url ? ` ${src.url}` : '';
         console.log(`  ${src.id}  ${src.title}${words}${url}`);
       }
+      if (artifacts.length > 0) {
+        console.log(`Studio (${artifacts.length}):`);
+        for (const a of artifacts) {
+          const typeName = ARTIFACT_TYPE_LABEL[a.type] ?? `type:${a.type}`;
+          const duration = a.durationSeconds !== undefined ? ` [${formatDuration(a.durationSeconds)}]` : '';
+          console.log(`  ${a.id}  [${typeName}] ${a.title}${duration}`);
+        }
+      }
     });
   });
 
 program.addCommand(detailCmd);
+
+// ── Delete Command ──
+
+const deleteCmd = new Command('delete')
+  .description('Delete one or more notebooks')
+  .argument('<notebook-ids...>', 'Notebook IDs to delete');
+
+addBrowserOptions(deleteCmd)
+  .action(async (notebookIds: string[], opts) => {
+    await withClient(opts, async (client) => {
+      for (const id of notebookIds) {
+        await client.deleteNotebook(id);
+        console.log(`Deleted: ${id}`);
+      }
+    });
+  });
+
+program.addCommand(deleteCmd);
 
 // ── Chat Command ──
 
@@ -391,8 +671,8 @@ const diagnoseCmd = new Command('diagnose')
       const proxy = resolveProxy({});
       console.log(`Proxy:       ${proxy ?? 'none'}`);
       console.log('API test:');
+      const client = new NotebookClient();
       try {
-        const client = new NotebookClient();
         await client.connect({ transport: 'auto', proxy });
         const notebooks = await client.listNotebooks();
         console.log(`  Status:    OK (${notebooks.length} notebooks)`);
@@ -405,10 +685,11 @@ const diagnoseCmd = new Command('diagnose')
         } catch {
           console.log('  Account:   FAILED');
         }
-        await client.disconnect();
       } catch (err) {
         console.log(`  Status:    FAILED`);
         console.log(`  Error:     ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        await client.disconnect();
       }
     } else {
       console.log('API test:    SKIPPED (no session)');

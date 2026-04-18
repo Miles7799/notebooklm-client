@@ -10,6 +10,26 @@ export type AudioLanguage = 'en' | 'zh' | 'ja' | 'ko' | 'es' | 'fr' | 'de' | 'pt
 export type AudioFormat = 'conversation' | 'lecture' | 'briefing';
 export type StudioFeature = 'audio_overview' | 'mind_map' | 'flashcards';
 
+// ── Artifact Generation Enums ──
+
+export type AudioStyleFormat = 'deep_dive' | 'brief' | 'critique' | 'debate';
+export type AudioLength = 'short' | 'default' | 'long';
+
+export type VideoFormat = 'explainer' | 'brief' | 'cinematic';
+export type VideoStyle = 'auto' | 'classic' | 'whiteboard' | 'kawaii' | 'anime' | 'watercolor' | 'retro_print';
+
+export type ReportTemplate = 'briefing_doc' | 'study_guide' | 'blog_post' | 'custom';
+
+export type QuizQuantity = 'fewer' | 'standard';
+export type QuizDifficulty = 'easy' | 'medium' | 'hard';
+
+export type InfographicOrientation = 'landscape' | 'portrait' | 'square';
+export type InfographicDetail = 'concise' | 'standard' | 'detailed';
+export type InfographicStyle = 'sketch_note' | 'professional' | 'bento_grid';
+
+export type SlideDeckFormat = 'detailed' | 'presenter';
+export type SlideDeckLength = 'default' | 'short';
+
 export type WorkflowStatus =
   | 'pending'
   | 'creating_notebook'
@@ -40,12 +60,96 @@ export interface SourceInput {
   researchMode?: ResearchMode;
 }
 
-// ── Options ──
+// ── Artifact Generate Options (discriminated union) ──
+
+export interface AudioArtifactOptions {
+  type: 'audio';
+  instructions?: string;
+  language?: string;
+  format?: AudioStyleFormat;
+  length?: AudioLength;
+}
+
+export interface ReportArtifactOptions {
+  type: 'report';
+  template?: ReportTemplate;
+  instructions?: string;
+  language?: string;
+}
+
+export interface VideoArtifactOptions {
+  type: 'video';
+  instructions?: string;
+  language?: string;
+  format?: VideoFormat;
+  style?: VideoStyle;
+}
+
+export interface QuizArtifactOptions {
+  type: 'quiz';
+  instructions?: string;
+  language?: string;
+  quantity?: QuizQuantity;
+  difficulty?: QuizDifficulty;
+}
+
+export interface FlashcardsArtifactOptions {
+  type: 'flashcards';
+  instructions?: string;
+  language?: string;
+  quantity?: QuizQuantity;
+  difficulty?: QuizDifficulty;
+}
+
+export interface InfographicArtifactOptions {
+  type: 'infographic';
+  instructions?: string;
+  language?: string;
+  orientation?: InfographicOrientation;
+  detail?: InfographicDetail;
+  style?: InfographicStyle;
+}
+
+export interface SlideDeckArtifactOptions {
+  type: 'slide_deck';
+  instructions?: string;
+  language?: string;
+  format?: SlideDeckFormat;
+  length?: SlideDeckLength;
+}
+
+export interface DataTableArtifactOptions {
+  type: 'data_table';
+  instructions?: string;
+  language?: string;
+}
+
+export type ArtifactGenerateOptions =
+  | AudioArtifactOptions
+  | ReportArtifactOptions
+  | VideoArtifactOptions
+  | QuizArtifactOptions
+  | FlashcardsArtifactOptions
+  | InfographicArtifactOptions
+  | SlideDeckArtifactOptions
+  | DataTableArtifactOptions;
+
+/** Legacy options for generateArtifact (backward compat with audio-only callers). */
+export interface LegacyArtifactOptions {
+  language?: string;
+  customPrompt?: string;
+}
+
+// ── Workflow Options ──
 
 export interface AudioOverviewOptions {
   source: SourceInput;
   language?: AudioLanguage;
+  /** @deprecated Use instructions instead */
   customPrompt?: string;
+  instructions?: string;
+  format?: AudioStyleFormat;
+  length?: AudioLength;
   outputDir: string;
 }
 
@@ -56,6 +160,63 @@ export interface MindMapOptions {
 
 export interface FlashcardsOptions {
   source: SourceInput;
+  outputDir: string;
+  instructions?: string;
+  language?: string;
+  quantity?: QuizQuantity;
+  difficulty?: QuizDifficulty;
+}
+
+export interface ReportOptions {
+  source: SourceInput;
+  outputDir: string;
+  template?: ReportTemplate;
+  instructions?: string;
+  language?: string;
+}
+
+export interface VideoOptions {
+  source: SourceInput;
+  outputDir: string;
+  format?: VideoFormat;
+  style?: VideoStyle;
+  instructions?: string;
+  language?: string;
+}
+
+export interface QuizOptions {
+  source: SourceInput;
+  outputDir: string;
+  instructions?: string;
+  language?: string;
+  quantity?: QuizQuantity;
+  difficulty?: QuizDifficulty;
+}
+
+export interface InfographicOptions {
+  source: SourceInput;
+  outputDir: string;
+  instructions?: string;
+  language?: string;
+  orientation?: InfographicOrientation;
+  detail?: InfographicDetail;
+  style?: InfographicStyle;
+}
+
+export interface SlideDeckOptions {
+  source: SourceInput;
+  outputDir: string;
+  instructions?: string;
+  language?: string;
+  format?: SlideDeckFormat;
+  length?: SlideDeckLength;
+}
+
+export interface DataTableOptions {
+  source: SourceInput;
+  outputDir: string;
+  instructions?: string;
+  language?: string;
 }
 
 export interface AnalyzeOptions {
@@ -79,8 +240,48 @@ export interface MindMapResult {
   notebookUrl: string;
 }
 
+export interface Flashcard {
+  front: string;
+  back: string;
+}
+
 export interface FlashcardsResult {
-  cards: Array<{ front: string; back: string }>;
+  artifactId: string;
+  htmlPath: string;
+  jsonPath: string;
+  markdownPath: string;
+  cards: Flashcard[];
+  notebookUrl: string;
+}
+
+export interface ReportResult {
+  markdownPath: string;
+  notebookUrl: string;
+}
+
+export interface VideoResult {
+  videoUrl: string;
+  notebookUrl: string;
+}
+
+export interface QuizResult {
+  htmlPath: string;
+  notebookUrl: string;
+}
+
+export interface InfographicResult {
+  imagePath: string;
+  notebookUrl: string;
+}
+
+export interface SlideDeckResult {
+  pptxPath: string;
+  pdfPath?: string;
+  notebookUrl: string;
+}
+
+export interface DataTableResult {
+  csvPath: string;
   notebookUrl: string;
 }
 

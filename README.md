@@ -6,7 +6,7 @@
 
 <a id="english"></a>
 
-Standalone CLI & library for Google's [NotebookLM](https://notebooklm.google.com/) — generate audio podcasts, analyze content, manage notebooks, and chat.
+Standalone CLI & library for Google's [NotebookLM](https://notebooklm.google.com/) — generate audio podcasts, reports, slides, quizzes, videos, infographics, data tables, flashcards, analyze content, manage notebooks, and chat.
 
 ## Requirements
 
@@ -46,8 +46,29 @@ npx notebooklm list --transport auto
 # Generate audio podcast from a URL
 npx notebooklm audio --transport auto --url "https://en.wikipedia.org/wiki/TypeScript" -o ./output -l en
 
-# Generate audio podcast from a topic
-npx notebooklm audio --transport auto --topic "quantum computing" -o ./output
+# Generate audio podcast from a topic (debate format, short)
+npx notebooklm audio --transport auto --topic "quantum computing" -o ./output --format debate --length short
+
+# Generate a report (briefing doc, study guide, blog post, or custom)
+npx notebooklm report --transport auto --url "https://example.com/article" -o ./output --template study_guide
+
+# Generate slides
+npx notebooklm slides --transport auto --url "https://example.com/article" -o ./output --instructions "Focus on key takeaways"
+
+# Generate a quiz
+npx notebooklm quiz --transport auto --url "https://example.com/article" -o ./output --difficulty medium
+
+# Generate flashcards
+npx notebooklm flashcards --transport auto --url "https://example.com/article" -o ./output
+
+# Generate a video overview
+npx notebooklm video --transport auto --url "https://example.com/article" -o ./output --format explainer --style whiteboard
+
+# Generate an infographic
+npx notebooklm infographic --transport auto --url "https://example.com/article" -o ./output --orientation landscape --style professional
+
+# Generate a data table
+npx notebooklm data-table --transport auto --url "https://example.com/article" -o ./output --instructions "Compare by category"
 
 # Analyze content
 npx notebooklm analyze --transport auto --url "https://example.com/paper.pdf" --question "What are the key findings?"
@@ -85,21 +106,94 @@ npx notebooklm diagnose
 | `detail <id>` | Show notebook title and sources |
 | `chat <id> --question "..."` | Chat with a notebook |
 | `audio` | Generate audio podcast |
+| `report` | Generate a report (briefing doc, study guide, blog post, custom) |
+| `video` | Generate a video overview |
+| `quiz` | Generate a quiz |
+| `flashcards` | Generate flashcards |
+| `infographic` | Generate an infographic |
+| `slides` | Generate a slide deck |
+| `data-table` | Generate a data table |
 | `analyze` | Analyze content with a question |
 | `diagnose` | Generate diagnostic report for troubleshooting |
 | `skill install` | Install AI agent skill (Claude Code / Codex) |
 
-### `audio` options
+### Source options (shared by all generation commands)
 
 ```
   --url <url>              Source URL
   --text <text>            Source text content
+  --file <path>            Local file (pdf, txt, md, docx, csv, pptx, epub, mp3, wav, etc.)
   --topic <topic>          Research topic (web search)
   --research-mode <mode>   fast or deep (default: fast)
+```
+
+### `audio` options
+
+```
   -o, --output <dir>       Output directory (required)
   -l, --language <lang>    Audio language (default: en)
-  --custom-prompt <prompt> Custom generation prompt
+  --instructions <text>    Custom generation instructions
+  --custom-prompt <prompt> Alias for --instructions
+  --format <fmt>           deep_dive | brief | critique | debate
+  --length <len>           short | default | long
   --keep-notebook          Keep notebook after completion
+```
+
+### `report` options
+
+```
+  -o, --output <dir>       Output directory (required)
+  --template <t>           briefing_doc | study_guide | blog_post | custom (default: briefing_doc)
+  --instructions <text>    Custom instructions (appended to template, or full prompt for custom)
+  -l, --language <lang>    Output language (default: en)
+```
+
+### `video` options
+
+```
+  -o, --output <dir>       Output directory (required)
+  --format <fmt>           explainer | brief | cinematic
+  --style <s>              auto | classic | whiteboard | kawaii | anime | watercolor | retro_print
+  --instructions <text>    Custom instructions
+  -l, --language <lang>    Output language (default: en)
+```
+
+### `quiz` / `flashcards` options
+
+```
+  -o, --output <dir>       Output directory (required)
+  --instructions <text>    Custom instructions
+  --quantity <q>           fewer | standard
+  --difficulty <d>         easy | medium | hard
+```
+
+### `infographic` options
+
+```
+  -o, --output <dir>       Output directory (required)
+  --instructions <text>    Custom instructions
+  --orientation <o>        landscape | portrait | square
+  --detail <d>             concise | standard | detailed
+  --style <s>              sketch_note | professional | bento_grid
+  -l, --language <lang>    Output language (default: en)
+```
+
+### `slides` options
+
+```
+  -o, --output <dir>       Output directory (required)
+  --instructions <text>    Custom instructions
+  --format <fmt>           detailed | presenter
+  --length <len>           default | short
+  -l, --language <lang>    Output language (default: en)
+```
+
+### `data-table` options
+
+```
+  -o, --output <dir>       Output directory (required)
+  --instructions <text>    Custom instructions (describe desired table structure)
+  -l, --language <lang>    Output language (default: en)
 ```
 
 ## Multi-Account
@@ -137,13 +231,20 @@ await client.addTextSource(notebookId, 'Title', 'Content...');
 const detail = await client.getNotebookDetail(notebookId);
 const { text } = await client.sendChat(notebookId, 'Summarize', detail.sources.map(s => s.id));
 
-// Check available features and account limits
-const config = await client.getStudioConfig(notebookId);
-const account = await client.getAccountInfo();
+// Generate artifacts with typed options
+const sourceIds = detail.sources.map(s => s.id);
 
-// Generate artifacts (audio, slides, docs — types fetched dynamically)
-const audioType = config.audioTypes.find(t => t.name === 'Deep Dive');
-await client.generateArtifact(notebookId, audioType.id, sourceIds, { language: 'en' });
+await client.generateArtifact(notebookId, sourceIds, {
+  type: 'audio', format: 'debate', length: 'short', instructions: 'Focus on key points',
+});
+
+await client.generateArtifact(notebookId, sourceIds, {
+  type: 'report', template: 'study_guide', instructions: 'Include diagrams',
+});
+
+await client.generateArtifact(notebookId, sourceIds, {
+  type: 'slide_deck', format: 'presenter', length: 'short',
+});
 
 await client.disconnect();
 ```
@@ -166,6 +267,7 @@ await client.deleteNotebook(notebookId)
 // Sources
 await client.addUrlSource(notebookId, url)            // → { sourceId, title }
 await client.addTextSource(notebookId, title, text)   // → { sourceId, title }
+await client.addFileSource(notebookId, filePath)       // → { sourceId }
 await client.createWebSearch(notebookId, query, mode) // → { researchId }
 await client.getSourceSummary(sourceId)               // → { summary }
 await client.deleteSource(sourceId)
@@ -178,16 +280,37 @@ await client.deleteChatThread(threadId)
 await client.getStudioConfig(notebookId)              // → StudioConfig
 await client.getAccountInfo()                          // → AccountInfo
 
-// Artifacts
-await client.generateArtifact(notebookId, type, sourceIds, options)
+// Artifacts (low-level)
+await client.generateArtifact(notebookId, sourceIds, options)
 await client.getArtifacts(notebookId)                 // → ArtifactInfo[]
+await client.getInteractiveHtml(artifactId)            // → string (HTML)
 await client.downloadAudio(downloadUrl, outputDir)    // → filePath
 await client.deleteArtifact(artifactId)
 
-// High-level workflows
+// High-level workflows (create notebook → add source → generate → download)
 await client.runAudioOverview(options, onProgress?)   // → { audioPath, notebookUrl }
+await client.runReport(options, onProgress?)           // → { htmlPath, notebookUrl }
+await client.runVideo(options, onProgress?)            // → { videoUrl, notebookUrl }
+await client.runQuiz(options, onProgress?)             // → { htmlPath, notebookUrl }
+await client.runFlashcards(options, onProgress?)       // → { htmlPath, notebookUrl }
+await client.runInfographic(options, onProgress?)      // → { htmlPath, notebookUrl }
+await client.runSlideDeck(options, onProgress?)        // → { htmlPath, notebookUrl }
+await client.runDataTable(options, onProgress?)        // → { htmlPath, notebookUrl }
 await client.runAnalyze(options, onProgress?)          // → { answer, notebookUrl }
 ```
+
+### Artifact types & options
+
+| Type | Code | Options |
+|------|------|---------|
+| Audio | 1 | `format`, `length`, `instructions`, `language` |
+| Report | 2 | `template`, `instructions`, `language` |
+| Video | 3 | `format`, `style`, `instructions`, `language` |
+| Quiz | 4 | `instructions`, `quantity`, `difficulty` |
+| Flashcards | 4 | `instructions`, `quantity`, `difficulty` |
+| Infographic | 7 | `orientation`, `detail`, `style`, `instructions`, `language` |
+| Slide Deck | 8 | `format`, `length`, `instructions`, `language` |
+| Data Table | 9 | `instructions`, `language` |
 
 ## Docker
 
@@ -230,7 +353,7 @@ MIT
 
 # notebooklm-client（中文文档）
 
-Google [NotebookLM](https://notebooklm.google.com/) 的独立 CLI 和编程库 —— 生成音频播客、分析内容、管理笔记本、对话。
+Google [NotebookLM](https://notebooklm.google.com/) 的独立 CLI 和编程库 —— 生成音频播客、报告、幻灯片、测验、视频、信息图、数据表、闪卡，分析内容、管理笔记本、对话。
 
 ## 环境要求
 
@@ -270,8 +393,29 @@ npx notebooklm list --transport auto
 # 从 URL 生成音频播客
 npx notebooklm audio --transport auto --url "https://zh.wikipedia.org/wiki/TypeScript" -o ./output -l zh
 
-# 从话题生成音频播客
-npx notebooklm audio --transport auto --topic "量子计算" -o ./output
+# 从话题生成音频播客（辩论格式，短篇）
+npx notebooklm audio --transport auto --topic "量子计算" -o ./output --format debate --length short
+
+# 生成报告（简报、学习指南、博客、自定义）
+npx notebooklm report --transport auto --url "https://example.com/article" -o ./output --template study_guide
+
+# 生成幻灯片
+npx notebooklm slides --transport auto --url "https://example.com/article" -o ./output --instructions "突出要点"
+
+# 生成测验
+npx notebooklm quiz --transport auto --url "https://example.com/article" -o ./output --difficulty medium
+
+# 生成闪卡
+npx notebooklm flashcards --transport auto --url "https://example.com/article" -o ./output
+
+# 生成视频概览
+npx notebooklm video --transport auto --url "https://example.com/article" -o ./output --format explainer
+
+# 生成信息图
+npx notebooklm infographic --transport auto --url "https://example.com/article" -o ./output --style professional
+
+# 生成数据表
+npx notebooklm data-table --transport auto --url "https://example.com/article" -o ./output --instructions "按类别对比"
 
 # 分析内容
 npx notebooklm analyze --transport auto --url "https://example.com/paper.pdf" --question "主要发现是什么？"
@@ -309,21 +453,94 @@ npx notebooklm diagnose
 | `detail <id>` | 显示笔记本标题和来源 |
 | `chat <id> --question "..."` | 与笔记本对话 |
 | `audio` | 生成音频播客 |
+| `report` | 生成报告（简报、学习指南、博客、自定义） |
+| `video` | 生成视频概览 |
+| `quiz` | 生成测验 |
+| `flashcards` | 生成闪卡 |
+| `infographic` | 生成信息图 |
+| `slides` | 生成幻灯片 |
+| `data-table` | 生成数据表 |
 | `analyze` | 分析内容并回答问题 |
 | `diagnose` | 生成诊断报告（用于提交 issue） |
 | `skill install` | 安装 AI agent skill（Claude Code / Codex） |
 
-### `audio` 选项
+### 素材选项（所有生成命令共用）
 
 ```
   --url <url>              素材 URL
   --text <text>            素材文本内容
+  --file <path>            本地文件（pdf, txt, md, docx, csv, pptx, epub, mp3, wav 等）
   --topic <topic>          研究话题（网页搜索）
   --research-mode <mode>   fast 或 deep（默认 fast）
+```
+
+### `audio` 选项
+
+```
   -o, --output <dir>       输出目录（必填）
   -l, --language <lang>    音频语言（默认 en）
-  --custom-prompt <prompt> 自定义生成提示词
+  --instructions <text>    自定义生成指令
+  --custom-prompt <prompt> --instructions 别名
+  --format <fmt>           deep_dive | brief | critique | debate
+  --length <len>           short | default | long
   --keep-notebook          完成后保留笔记本
+```
+
+### `report` 选项
+
+```
+  -o, --output <dir>       输出目录（必填）
+  --template <t>           briefing_doc | study_guide | blog_post | custom（默认 briefing_doc）
+  --instructions <text>    自定义指令（追加到模板，或 custom 时为完整提示词）
+  -l, --language <lang>    输出语言（默认 en）
+```
+
+### `video` 选项
+
+```
+  -o, --output <dir>       输出目录（必填）
+  --format <fmt>           explainer | brief | cinematic
+  --style <s>              auto | classic | whiteboard | kawaii | anime | watercolor | retro_print
+  --instructions <text>    自定义指令
+  -l, --language <lang>    输出语言（默认 en）
+```
+
+### `quiz` / `flashcards` 选项
+
+```
+  -o, --output <dir>       输出目录（必填）
+  --instructions <text>    自定义指令
+  --quantity <q>           fewer | standard
+  --difficulty <d>         easy | medium | hard
+```
+
+### `infographic` 选项
+
+```
+  -o, --output <dir>       输出目录（必填）
+  --instructions <text>    自定义指令
+  --orientation <o>        landscape | portrait | square
+  --detail <d>             concise | standard | detailed
+  --style <s>              sketch_note | professional | bento_grid
+  -l, --language <lang>    输出语言（默认 en）
+```
+
+### `slides` 选项
+
+```
+  -o, --output <dir>       输出目录（必填）
+  --instructions <text>    自定义指令
+  --format <fmt>           detailed | presenter
+  --length <len>           default | short
+  -l, --language <lang>    输出语言（默认 en）
+```
+
+### `data-table` 选项
+
+```
+  -o, --output <dir>       输出目录（必填）
+  --instructions <text>    自定义指令（描述期望的表格结构）
+  -l, --language <lang>    输出语言（默认 en）
 ```
 
 ## 多账号
@@ -361,13 +578,20 @@ await client.addTextSource(notebookId, '标题', '内容...');
 const detail = await client.getNotebookDetail(notebookId);
 const { text } = await client.sendChat(notebookId, '帮我总结', detail.sources.map(s => s.id));
 
-// 查看可用功能和账号限额
-const config = await client.getStudioConfig(notebookId);
-const account = await client.getAccountInfo();
+// 生成产物（带类型化选项）
+const sourceIds = detail.sources.map(s => s.id);
 
-// 生成产物（音频、幻灯片、文档 —— 类型从服务端动态获取）
-const audioType = config.audioTypes.find(t => t.name === 'Deep Dive');
-await client.generateArtifact(notebookId, audioType.id, sourceIds, { language: 'zh' });
+await client.generateArtifact(notebookId, sourceIds, {
+  type: 'audio', format: 'debate', length: 'short', instructions: '关注要点',
+});
+
+await client.generateArtifact(notebookId, sourceIds, {
+  type: 'report', template: 'study_guide', instructions: '包含图表',
+});
+
+await client.generateArtifact(notebookId, sourceIds, {
+  type: 'slide_deck', format: 'presenter', length: 'short',
+});
 
 await client.disconnect();
 ```
@@ -390,6 +614,7 @@ await client.deleteNotebook(notebookId)
 // 来源
 await client.addUrlSource(notebookId, url)            // → { sourceId, title }
 await client.addTextSource(notebookId, title, text)   // → { sourceId, title }
+await client.addFileSource(notebookId, filePath)       // → { sourceId }
 await client.createWebSearch(notebookId, query, mode) // → { researchId }
 await client.getSourceSummary(sourceId)               // → { summary }
 await client.deleteSource(sourceId)
@@ -402,16 +627,37 @@ await client.deleteChatThread(threadId)
 await client.getStudioConfig(notebookId)              // → StudioConfig
 await client.getAccountInfo()                          // → AccountInfo
 
-// 产物
-await client.generateArtifact(notebookId, type, sourceIds, options)
+// 产物（底层）
+await client.generateArtifact(notebookId, sourceIds, options)
 await client.getArtifacts(notebookId)                 // → ArtifactInfo[]
+await client.getInteractiveHtml(artifactId)            // → string (HTML)
 await client.downloadAudio(downloadUrl, outputDir)    // → filePath
 await client.deleteArtifact(artifactId)
 
-// 高级工作流
+// 高级工作流（创建笔记本 → 添加来源 → 生成 → 下载）
 await client.runAudioOverview(options, onProgress?)   // → { audioPath, notebookUrl }
+await client.runReport(options, onProgress?)           // → { htmlPath, notebookUrl }
+await client.runVideo(options, onProgress?)            // → { videoUrl, notebookUrl }
+await client.runQuiz(options, onProgress?)             // → { htmlPath, notebookUrl }
+await client.runFlashcards(options, onProgress?)       // → { htmlPath, notebookUrl }
+await client.runInfographic(options, onProgress?)      // → { htmlPath, notebookUrl }
+await client.runSlideDeck(options, onProgress?)        // → { htmlPath, notebookUrl }
+await client.runDataTable(options, onProgress?)        // → { htmlPath, notebookUrl }
 await client.runAnalyze(options, onProgress?)          // → { answer, notebookUrl }
 ```
+
+### 产物类型和选项
+
+| 类型 | 代码 | 选项 |
+|------|------|------|
+| 音频 | 1 | `format`, `length`, `instructions`, `language` |
+| 报告 | 2 | `template`, `instructions`, `language` |
+| 视频 | 3 | `format`, `style`, `instructions`, `language` |
+| 测验 | 4 | `instructions`, `quantity`, `difficulty` |
+| 闪卡 | 4 | `instructions`, `quantity`, `difficulty` |
+| 信息图 | 7 | `orientation`, `detail`, `style`, `instructions`, `language` |
+| 幻灯片 | 8 | `format`, `length`, `instructions`, `language` |
+| 数据表 | 9 | `instructions`, `language` |
 
 ## Docker
 
@@ -451,6 +697,24 @@ MIT
 ---
 
 ## Changelog / 更新日志
+
+### v0.3.0 (2026-03-27)
+
+- All artifact types: report, video, quiz, flashcards, infographic, slides, data table
+- Custom instructions/prompts for every artifact type
+- Audio format (deep_dive/brief/critique/debate) and length (short/default/long) options
+- 7 new CLI commands: `report`, `video`, `quiz`, `flashcards`, `infographic`, `slides`, `data-table`
+- Per-type payload builders with correct RPC structures
+- Backward compatible `generateArtifact()` API
+
+---
+
+- 全部产物类型：报告、视频、测验、闪卡、信息图、幻灯片、数据表
+- 所有产物类型支持自定义指令/提示词
+- 音频格式（deep_dive/brief/critique/debate）和时长（short/default/long）选项
+- 7 个新 CLI 命令：`report`、`video`、`quiz`、`flashcards`、`infographic`、`slides`、`data-table`
+- 按类型独立构建正确的 RPC payload
+- `generateArtifact()` API 向后兼容
 
 ### v0.2.0 (2026-03-16)
 

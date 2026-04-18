@@ -3,8 +3,21 @@
  */
 
 import { parseEnvelopes } from './boq-parser.js';
-import type { NotebookInfo, SourceInfo, ArtifactInfo, StudioConfig, StudioAudioType, StudioDocType, AccountInfo, ResearchResult } from './types.js';
+import type {
+  NotebookInfo,
+  SourceInfo,
+  ArtifactInfo,
+  StudioConfig,
+  StudioAudioType,
+  StudioDocType,
+  AccountInfo,
+  ResearchResult,
+  Flashcard,
+} from './types.js';
 type QuotaInfo = AccountInfo;
+
+const FLASHCARD_FRONT_KEYS = ['front', 'frontText', 'front_text', 'question', 'term', 'prompt', 'f'] as const;
+const FLASHCARD_BACK_KEYS = ['back', 'backText', 'back_text', 'answer', 'definition', 'response', 'b'] as const;
 
 // ── Helpers ──
 
@@ -34,6 +47,82 @@ function extractInner(raw: string): unknown {
 
 function extractAllInner(raw: string): unknown[] {
   return parseEnvelopes(raw);
+}
+
+function unwrapSingletonArrays<T>(value: T): T {
+  let current: unknown = value;
+  while (Array.isArray(current) && current.length === 1 && Array.isArray(current[0])) {
+    current = current[0];
+  }
+  return current as T;
+}
+
+function isLikelyArtifactId(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^[A-Za-z0-9_-]{3,}$/.test(value)
+    && !value.startsWith('http')
+    && !value.includes('<');
+}
+
+function findArtifactTuple(data: unknown, depth = 0): unknown[] | null {
+  if (depth > 8 || !Array.isArray(data)) return null;
+
+  const entry = unwrapSingletonArrays(data);
+  if (Array.isArray(entry) && isLikelyArtifactId(entry[0])) {
+    const title = typeof entry[1] === 'string' ? entry[1] : '';
+    if (title || typeof entry[2] === 'number' || entry.length <= 4) {
+      return entry;
+    }
+  }
+
+  for (const item of entry) {
+    const found = findArtifactTuple(item, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+function looksLikeArtifactEntry(value: unknown): value is unknown[] {
+  if (!Array.isArray(value)) return false;
+  const entry = unwrapSingletonArrays(value);
+  return Array.isArray(entry)
+    && isLikelyArtifactId(entry[0])
+    && (typeof entry[1] === 'string' || typeof entry[2] === 'number' || Array.isArray(entry[3]));
+}
+
+function collectArtifactEntries(data: unknown, results: unknown[][] = [], seen = new Set<string>(), depth = 0): unknown[][] {
+  if (depth > 10 || !Array.isArray(data)) return results;
+
+  const entry = unwrapSingletonArrays(data);
+  if (looksLikeArtifactEntry(entry)) {
+    const artifactId = entry[0] as string;
+    if (!seen.has(artifactId)) {
+      seen.add(artifactId);
+      results.push(entry);
+    }
+  }
+
+  for (const item of entry) {
+    collectArtifactEntries(item, results, seen, depth + 1);
+  }
+
+  return results;
+}
+
+function collectSourceIds(data: unknown, seen = new Set<string>(), depth = 0): string[] {
+  if (depth > 6 || !Array.isArray(data)) return [...seen];
+  for (const item of data) {
+    if (Array.isArray(item) && Array.isArray(item[0]) && typeof item[0][0] === 'string') {
+      seen.add(item[0][0]);
+      continue;
+    }
+    if (Array.isArray(item) && typeof item[0] === 'string' && item.length === 1) {
+      seen.add(item[0]);
+      continue;
+    }
+    collectSourceIds(item, seen, depth + 1);
+  }
+  return [...seen];
 }
 
 // ── Notebook CRUD Parsers ──
@@ -145,8 +234,8 @@ export function parseSourceSummary(raw: string): { sourceId: string; summary: st
 
 export function parseGenerateArtifact(raw: string): { artifactId: string; title: string } {
   const inner = extractInner(raw);
-  if (!Array.isArray(inner)) return { artifactId: '', title: '' };
-  const entry = Array.isArray(inner[0]) ? inner[0] as unknown[] : inner;
+  const entry = findArtifactTuple(inner);
+  if (!entry) return { artifactId: '', title: '' };
   const artifactId = typeof entry[0] === 'string' ? entry[0] : '';
   const title = typeof entry[1] === 'string' ? entry[1] : '';
   return { artifactId, title };
@@ -156,37 +245,19 @@ export function parseArtifacts(raw: string): ArtifactInfo[] {
   const inner = extractInner(raw);
   if (!Array.isArray(inner)) return [];
 
-  let entries: unknown[] = inner;
-  if (entries.length === 1 && Array.isArray(entries[0])) {
-    entries = entries[0] as unknown[];
-  }
-
   const artifacts: ArtifactInfo[] = [];
+  for (const entry of collectArtifactEntries(inner)) {
+    const artifactId = typeof entry[0] === 'string' ? entry[0] : '';
+    if (!artifactId) continue;
 
-  for (const rawEntry of entries) {
-    if (!Array.isArray(rawEntry)) continue;
-    const entry: unknown[] = (rawEntry.length === 1 && Array.isArray(rawEntry[0]))
-      ? rawEntry[0] as unknown[]
-      : rawEntry;
+    const artifact: ArtifactInfo = {
+      id: artifactId,
+      title: typeof entry[1] === 'string' ? entry[1] : '',
+      type: typeof entry[2] === 'number' ? entry[2] : 0,
+    };
 
-    const id = typeof entry[0] === 'string' ? entry[0] : '';
-    const title = typeof entry[1] === 'string' ? entry[1] : '';
-    const type = typeof entry[2] === 'number' ? entry[2] : 0;
-    if (!id) continue;
-
-    const artifact: ArtifactInfo = { id, title, type };
-
-    const sourceIdsRaw = getArray(entry, 3);
-    if (sourceIdsRaw) {
-      artifact.sourceIds = [];
-      for (const sid of sourceIdsRaw) {
-        if (Array.isArray(sid) && Array.isArray(sid[0]) && typeof sid[0][0] === 'string') {
-          artifact.sourceIds.push(sid[0][0]);
-        } else if (Array.isArray(sid) && typeof sid[0] === 'string') {
-          artifact.sourceIds.push(sid[0]);
-        }
-      }
-    }
+    const sourceIds = collectSourceIds(entry[3]);
+    if (sourceIds.length > 0) artifact.sourceIds = sourceIds;
 
     const mediaUrls = findMediaUrls(entry);
     if (mediaUrls.download) artifact.downloadUrl = mediaUrls.download;
@@ -252,6 +323,165 @@ export function findArtifactDownloadUrl(raw: string, artifactId: string): string
   const artifacts = parseArtifacts(raw);
   const artifact = artifacts.find((a) => a.id === artifactId);
   return artifact?.downloadUrl ?? null;
+}
+
+function decodeCapturedString(value: string): string {
+  try {
+    return JSON.parse(`"${value.replace(/"/g, '\\"')}"`) as string;
+  } catch {
+    return value
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"')
+      .replace(/\\'/g, "'")
+      .replace(/\\u003c/gi, '<')
+      .replace(/\\u003e/gi, '>')
+      .replace(/\\u0026/gi, '&')
+      .replace(/\\\//g, '/');
+  }
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) => String.fromCodePoint(parseInt(code, 16)));
+}
+
+function normalizeCardText(value: string): string {
+  return decodeHtmlEntities(
+    decodeCapturedString(value)
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|section|article|h\d)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\r/g, '')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n[ \t]+/g, '\n')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim(),
+  );
+}
+
+function addFlashcard(cards: Flashcard[], seen: Set<string>, frontRaw: string, backRaw: string): void {
+  const front = normalizeCardText(frontRaw);
+  const back = normalizeCardText(backRaw);
+  if (!front || !back) return;
+  const key = `${front}\u241F${back}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  cards.push({ front, back });
+}
+
+function firstDefinedProp(props: Map<string, string>, keys: readonly string[]): string {
+  for (const key of keys) {
+    const value = props.get(key);
+    if (value) return value;
+  }
+  return '';
+}
+
+function extractFlashcardsFromObjectSnippets(source: string, cards: Flashcard[], seen: Set<string>): void {
+  const objectRegex = /\{[\s\S]{0,4000}?"(?:front|frontText|front_text|back|backText|back_text|question|answer|term|definition|prompt|response|f|b)"\s*:\s*"(?:\\.|[^"\\])*"[\s\S]{0,4000}?\}/g;
+  const propRegex = /"([A-Za-z_][A-Za-z0-9_]*)"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+
+  for (const match of source.matchAll(objectRegex)) {
+    const snippet = match[0];
+    if (!snippet) continue;
+
+    const props = new Map<string, string>();
+    for (const propMatch of snippet.matchAll(propRegex)) {
+      const key = propMatch[1];
+      const value = propMatch[2];
+      if (key !== undefined && value !== undefined) {
+        props.set(key, value);
+      }
+    }
+
+    const front = firstDefinedProp(props, FLASHCARD_FRONT_KEYS);
+    const back = firstDefinedProp(props, FLASHCARD_BACK_KEYS);
+    if (front && back) addFlashcard(cards, seen, front, back);
+  }
+}
+
+function extractFlashcardsFromDom(source: string, cards: Flashcard[], seen: Set<string>): void {
+  const containerRegex = /<(section|article|li|div)\b[^>]*\b(?:flashcard|card)\b[^>]*>([\s\S]{1,4000}?)<\/\1>/gi;
+  const pairRegex = /<[^>]*(?:front|question|term|prompt)[^>]*>([\s\S]{1,1200}?)<\/[^>]+>[\s\S]{0,1200}?<[^>]*(?:back|answer|definition|response)[^>]*>([\s\S]{1,1200}?)<\/[^>]+>/i;
+
+  for (const match of source.matchAll(containerRegex)) {
+    const block = match[2];
+    if (!block) continue;
+    const pair = pairRegex.exec(block);
+    if (!pair) continue;
+    const front = pair[1];
+    const back = pair[2];
+    if (front !== undefined && back !== undefined) {
+      addFlashcard(cards, seen, front, back);
+    }
+  }
+}
+
+export function extractFlashcardsFromHtml(html: string): Flashcard[] {
+  if (!html) return [];
+
+  const cards: Flashcard[] = [];
+  const seen = new Set<string>();
+  const sources = [html, decodeHtmlEntities(html)];
+
+  for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+    if (match[1]) {
+      sources.push(match[1]);
+      sources.push(decodeHtmlEntities(match[1]));
+    }
+  }
+
+  for (const source of sources) {
+    extractFlashcardsFromObjectSnippets(source, cards, seen);
+  }
+
+  if (cards.length === 0) {
+    for (const source of sources) {
+      extractFlashcardsFromDom(source, cards, seen);
+    }
+  }
+
+  return cards;
+}
+
+export function renderFlashcardsMarkdown(cards: Flashcard[]): string {
+  const lines = ['# Flashcards', ''];
+  if (cards.length === 0) {
+    lines.push('_No flashcards could be parsed from the exported HTML. Check the exported HTML or regenerate the artifact._');
+    lines.push('');
+    return lines.join('\n');
+  }
+
+  lines.push(`> Total cards: ${cards.length}`);
+  lines.push('');
+
+  cards.forEach((card, index) => {
+    lines.push(`## Card ${index + 1}`);
+    lines.push('');
+    lines.push('### Front');
+    lines.push(card.front);
+    lines.push('');
+    lines.push('### Back');
+    lines.push(card.back);
+    lines.push('');
+    if (index < cards.length - 1) {
+      lines.push('---');
+      lines.push('');
+    }
+  });
+
+  return lines.join('\n');
 }
 
 // ── Chat Parser ──

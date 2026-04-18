@@ -10,7 +10,41 @@ import { join } from 'node:path';
 import { Agent, ProxyAgent, request as undiciRequest } from 'undici';
 import { CHROME_CIPHERS } from './tls-config.js';
 import { getSessionPath } from './paths.js';
-import type { NotebookRpcSession } from './types.js';
+import type { NotebookRpcSession, SessionCookie } from './types.js';
+
+/**
+ * Infer a domain-scoped cookieJar from a flat cookie string.
+ * Google downloads (lh3.googleusercontent.com, contribution.usercontent.google.com)
+ * require cookies sent with matching domains. CDP export provides this natively;
+ * for imported sessions we infer it from cookie naming conventions.
+ */
+/**
+ * Build a basic cookieJar from flat cookie string for API calls.
+ *
+ * NOTE: This only sets cookies on .google.com — sufficient for RPC calls
+ * (notebooklm.google.com) but NOT for downloads from Google CDN domains
+ * (lh3.googleusercontent.com, contribution.usercontent.google.com).
+ * Downloads require export-session which captures domain-scoped cookies
+ * from Chrome CDP (Network.getAllCookies).
+ */
+function inferCookieJar(cookies: string): SessionCookie[] {
+  if (!cookies) return [];
+
+  const jar: SessionCookie[] = [];
+
+  for (const pair of cookies.split(';')) {
+    const eq = pair.indexOf('=');
+    if (eq <= 0) continue;
+    const name = pair.slice(0, eq).trim();
+    const value = pair.slice(eq + 1).trim();
+    if (!name || !value) continue;
+
+    const secure = name.startsWith('__Secure') || name.startsWith('__Host');
+    jar.push({ name, value, domain: '.google.com', path: '/', secure, httpOnly: true });
+  }
+
+  return jar;
+}
 
 interface StoredSession {
   version: 1;
@@ -65,6 +99,11 @@ export async function loadSession(
 
   if (stored.version !== 1 || !stored.session?.at) {
     return null;
+  }
+
+  // Auto-generate cookieJar from flat cookies if missing (import-session compat)
+  if (!stored.session.cookieJar?.length && stored.session.cookies) {
+    stored.session.cookieJar = inferCookieJar(stored.session.cookies);
   }
 
   return stored.session;
@@ -169,6 +208,7 @@ export async function refreshTokens(
     bl: blMatch?.[1] ?? session.bl,
     fsid: fsidMatch?.[1] ?? session.fsid,
     cookies: updatedCookies,
+    cookieJar: inferCookieJar(updatedCookies),
     userAgent: session.userAgent,
     language: langMatch?.[1]?.split('-')[0] ?? session.language,
   };
